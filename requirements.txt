@@ -3,6 +3,7 @@ geopandas
 keplergl
 palettable
 localtileserver
+rtree
 streamlit
 streamlit-folium
 streamlit-keplergl
