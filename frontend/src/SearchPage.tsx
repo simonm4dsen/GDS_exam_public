@@ -392,8 +392,9 @@ export default function SearchPage({ theme }: { theme: Theme }) {
               flexShrink: 0,
               overflowY: "auto",
               padding: "12px 16px",
-              borderLeft: "1px solid #333",
-              background: "#161616",
+              borderLeft: "1px solid var(--border)",
+              background: "var(--bg-elevated)",
+              color: "var(--text)",
             }}
           >
             <h3 style={{ marginTop: 0 }}>Sale summary</h3>
