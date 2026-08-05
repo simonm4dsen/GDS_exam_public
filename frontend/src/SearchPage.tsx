@@ -267,6 +267,144 @@ function PriceDistribution({ prices }: { prices: number[] }) {
   );
 }
 
+interface YearlyPoint {
+  year: number;
+  mean: number;
+  std: number;
+  count: number;
+}
+
+function computeYearlyStats(rows: SaleRow[]): YearlyPoint[] {
+  const byYear = new Map<number, number[]>();
+  for (const r of rows) {
+    if (!byYear.has(r.year)) byYear.set(r.year, []);
+    byYear.get(r.year)!.push(r.adjustedSqmPrice);
+  }
+  return Array.from(byYear.entries())
+    .map(([year, prices]) => {
+      const n = prices.length;
+      const mean = prices.reduce((a, b) => a + b, 0) / n;
+      const variance = n > 1 ? prices.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0;
+      return { year, mean, std: Math.sqrt(variance), count: n };
+    })
+    .sort((a, b) => a.year - b.year);
+}
+
+function PriceDevelopment({ rows }: { rows: SaleRow[] }) {
+  const width = 480;
+  const height = 190;
+  const padding = { top: 10, right: 10, bottom: 24, left: 46 };
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const points = computeYearlyStats(rows);
+  if (points.length === 0) return null;
+
+  const innerW = width - padding.left - padding.right;
+  const innerH = height - padding.top - padding.bottom;
+
+  const minYear = points[0].year;
+  const maxYear = points[points.length - 1].year;
+  const yearSpan = maxYear - minYear || 1;
+
+  const yMin = Math.min(...points.map((p) => p.mean - p.std));
+  const yMax = Math.max(...points.map((p) => p.mean + p.std));
+  const yPad = (yMax - yMin || 1) * 0.08;
+  const domainMin = yMin - yPad;
+  const domainMax = yMax + yPad;
+
+  const xScale = (year: number) => padding.left + ((year - minYear) / yearSpan) * innerW;
+  const yScale = (v: number) => padding.top + innerH - ((v - domainMin) / (domainMax - domainMin)) * innerH;
+
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.year)},${yScale(p.mean)}`).join(" ");
+  const upperPath = points.map((p, i) => `${i === 0 ? "M" : "L"}${xScale(p.year)},${yScale(p.mean + p.std)}`).join(" ");
+  const lowerPath = [...points]
+    .reverse()
+    .map((p) => `L${xScale(p.year)},${yScale(p.mean - p.std)}`)
+    .join(" ");
+  const bandPath = `${upperPath} ${lowerPath} Z`;
+
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scaleX = width / rect.width;
+    const px = (e.clientX - rect.left) * scaleX;
+    let nearest = 0;
+    let best = Infinity;
+    points.forEach((p, i) => {
+      const d = Math.abs(xScale(p.year) - px);
+      if (d < best) {
+        best = d;
+        nearest = i;
+      }
+    });
+    setHoverIdx(nearest);
+  }
+
+  const hovered = hoverIdx != null ? points[hoverIdx] : null;
+  const labelX = hovered ? Math.min(Math.max(xScale(hovered.year), padding.left + 50), width - padding.right - 50) : 0;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      role="img"
+      aria-label="Mean adjusted price per year with standard deviation band"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHoverIdx(null)}
+      style={{ cursor: "crosshair" }}
+    >
+      <path d={bandPath} fill="var(--accent)" opacity={0.15} />
+      <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth={2} />
+      {points.map((p, i) => (
+        <circle key={i} cx={xScale(p.year)} cy={yScale(p.mean)} r={2.5} fill="var(--accent)" />
+      ))}
+
+      <line
+        x1={padding.left}
+        y1={padding.top + innerH}
+        x2={width - padding.right}
+        y2={padding.top + innerH}
+        stroke="var(--border)"
+      />
+      <text x={padding.left} y={height - 6} fontSize={10} fill="var(--text-muted)">
+        {minYear}
+      </text>
+      <text x={width - padding.right} y={height - 6} fontSize={10} fill="var(--text-muted)" textAnchor="end">
+        {maxYear}
+      </text>
+      <text x={padding.left - 6} y={yScale(domainMax) + 4} fontSize={10} fill="var(--text-muted)" textAnchor="end">
+        {fmt(domainMax)}
+      </text>
+      <text x={padding.left - 6} y={yScale(domainMin) + 4} fontSize={10} fill="var(--text-muted)" textAnchor="end">
+        {fmt(domainMin)}
+      </text>
+
+      {hovered && (
+        <>
+          <line
+            x1={xScale(hovered.year)}
+            y1={padding.top}
+            x2={xScale(hovered.year)}
+            y2={padding.top + innerH}
+            stroke="var(--text)"
+            strokeDasharray="3,3"
+            opacity={0.6}
+          />
+          <circle cx={xScale(hovered.year)} cy={yScale(hovered.mean)} r={4} fill="var(--accent)" stroke="var(--bg-elevated)" strokeWidth={1.5} />
+          <g transform={`translate(${labelX}, ${padding.top + 4})`}>
+            <rect x={-55} y={-2} width={110} height={40} rx={3} fill="var(--bg-elevated)" stroke="var(--border)" />
+            <text x={0} y={10} fontSize={10} fill="var(--text)" textAnchor="middle">
+              {hovered.year}: {fmt(hovered.mean)} kr/m²
+            </text>
+            <text x={0} y={22} fontSize={9} fill="var(--text-muted)" textAnchor="middle">
+              ±{fmt(hovered.std)} ({hovered.count} sales)
+            </text>
+          </g>
+        </>
+      )}
+    </svg>
+  );
+}
+
 const DEFAULT_PALETTE: PaletteName = "Viridis";
 
 export default function SearchPage({ theme }: { theme: Theme }) {
@@ -429,6 +567,9 @@ export default function SearchPage({ theme }: { theme: Theme }) {
 
             <h4>Price distribution</h4>
             <PriceDistribution prices={stats.rows.map((r) => r.adjustedSqmPrice)} />
+
+            <h4>Price development</h4>
+            <PriceDevelopment rows={stats.rows} />
 
             <h4>Sales by year</h4>
             <div style={{ overflowX: "auto" }}>
