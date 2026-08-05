@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ColumnLayer } from "@deck.gl/layers";
 import MapView from "./MapView";
 import { searchAddress, type SearchResult } from "./api";
-import { colorForValue, type PaletteName, PALETTE_NAMES } from "./palettes";
+import { colorForValue, type PaletteName } from "./palettes";
 
 interface SaleRow {
   address: string;
@@ -121,11 +121,10 @@ function PriceHistogram({ prices }: { prices: number[] }) {
   );
 }
 
+const DEFAULT_PALETTE: PaletteName = "Viridis";
+
 export default function SearchPage() {
   const [text, setText] = useState("");
-  const [minAddresses, setMinAddresses] = useState(5);
-  const [minApartments, setMinApartments] = useState(50);
-  const [palette, setPalette] = useState<PaletteName>("Viridis");
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +134,7 @@ export default function SearchPage() {
     setLoading(true);
     setError(null);
     try {
-      const r = await searchAddress(text, minAddresses, minApartments);
+      const r = await searchAddress(text);
       setResult(r);
     } catch (e: any) {
       setError(String(e.message ?? e));
@@ -163,10 +162,11 @@ export default function SearchPage() {
         elevationScale: 250,
         getPosition: (f: any) => f.geometry.coordinates,
         getElevation: (f: any) => ((f.properties.adjusted_sqm_price ?? min) - min) / span,
-        getFillColor: (f: any) => colorForValue(((f.properties.adjusted_sqm_price ?? min) - min) / span, palette),
+        getFillColor: (f: any) =>
+          colorForValue(((f.properties.adjusted_sqm_price ?? min) - min) / span, DEFAULT_PALETTE),
       }),
     ];
-  }, [result, palette]);
+  }, [result]);
 
   const stats = useMemo(() => (result ? computeStats(result) : null), [result]);
 
@@ -186,36 +186,6 @@ export default function SearchPage() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
         />
-        <label>
-          Min. adjacent addresses
-          <select value={minAddresses} onChange={(e) => setMinAddresses(Number(e.target.value))}>
-            {Array.from({ length: 25 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Min. apartments
-          <select value={minApartments} onChange={(e) => setMinApartments(Number(e.target.value))}>
-            {Array.from({ length: 10 }, (_, i) => (i + 1) * 10).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Palette
-          <select value={palette} onChange={(e) => setPalette(e.target.value as PaletteName)}>
-            {PALETTE_NAMES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
         <button onClick={handleSearch} disabled={loading}>
           {loading ? "Searching…" : "Search"}
         </button>

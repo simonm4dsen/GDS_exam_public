@@ -113,19 +113,13 @@ def parish_stats(
 
 
 @app.get("/api/search")
-def search_address(
-    address: str = Query(..., min_length=3),
-    min_addresses: int = Query(5, ge=1, le=25),
-    min_apartments: int = Query(50, ge=10, le=500),
-) -> dict:
+def search_address(address: str = Query(..., min_length=3)) -> dict:
     geocoded = search.geocode(address)
     if geocoded["lat"] is None or geocoded["lng"] is None:
         raise HTTPException(404, f"Could not geocode address: {address}")
 
     gdf = data.get_apartments()
-    nearby = search.nearest_apartments(
-        gdf, geocoded["lat"], geocoded["lng"], min_addresses=min_addresses, min_apartments=min_apartments
-    )
+    nearby = search.nearest_apartments(gdf, geocoded["lat"], geocoded["lng"])
 
     return {
         "query": address,

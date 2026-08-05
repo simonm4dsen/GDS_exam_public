@@ -63,16 +63,8 @@ export interface SearchResult {
   apartments: GeoJSON.FeatureCollection;
 }
 
-export async function searchAddress(
-  address: string,
-  minAddresses = 5,
-  minApartments = 50
-): Promise<SearchResult> {
-  const qs = new URLSearchParams({
-    address,
-    min_addresses: String(minAddresses),
-    min_apartments: String(minApartments),
-  });
+export async function searchAddress(address: string): Promise<SearchResult> {
+  const qs = new URLSearchParams({ address });
   const r = await fetch(`${API_BASE}/api/search?${qs.toString()}`);
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));

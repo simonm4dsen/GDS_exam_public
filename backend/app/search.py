@@ -1,14 +1,13 @@
-"""Address geocoding via Denmark's DAWA/Datafordeler address-washer API, and
-nearest-neighbor apartment search - ported from the original dawa_scrape_prod.py /
-app.py Streamlit 'Search' page logic."""
+"""Address geocoding via Denmark's DAWA/Datafordeler address-washer API, and an
+adaptive nearest-neighbor apartment search for the webapp's Search page."""
 from __future__ import annotations
 
 import time
 from typing import Optional
 
 import geopandas as gpd
+import numpy as np
 import requests
-from shapely.geometry import Point
 
 USER_AGENT = "Mozilla/5.0 (compatible; didactic-engine-webapp/1.0)"
 
@@ -68,46 +67,70 @@ def nearest_apartments(
     gdf: gpd.GeoDataFrame,
     lat: float,
     lng: float,
-    min_addresses: int = 5,
-    min_apartments: int = 50,
-    max_iterations: int = 2000,
+    min_addresses: int = 4,
+    max_addresses: int = 40,
+    max_apartments: int = 400,
+    gap_factor: float = 3.0,
+    min_gap_m: float = 40.0,
 ) -> gpd.GeoDataFrame:
-    """Expands outward from (lat, lng) picking nearest not-yet-visited addresses
-    until both the min_addresses and min_apartments thresholds are met - ported from
-    the original Streamlit 'Search' page's expanding nearest-neighbor loop, with a
-    hard iteration cap to guarantee termination."""
-    search_gdf = gdf.copy()
-    search_gdf["lnglat"] = search_gdf["lng"].astype(str) + "," + search_gdf["lat"].astype(str)
+    """Selects the searched address plus nearby addresses using an adaptive
+    distance cutoff instead of a fixed radius.
 
-    points = [(lat, lng)]
-    points_set = {(lat, lng)}
-    collected_idx: list[int] = []
-    count = 0
-    iterations = 0
+    Buildings/entrances (grouped by rounded lat/lng, since a building's units all
+    share the same geocoded point) are ranked by (haversine) distance from the
+    search point. We always keep at least `min_addresses` of the nearest ones,
+    then keep expanding outward one building at a time as long as consecutive
+    buildings are still "close together" - i.e. the gap to the next building is
+    not much larger than the typical gap seen so far. This naturally adapts to
+    local address density: in a dense city block it keeps going for many
+    buildings, while in a sparse rural area it stops after just a couple of
+    nearby buildings instead of reaching out an arbitrary fixed radius to find
+    more. All apartment units (all floors, all sale years) at each selected
+    building are included in the result.
+    """
+    valid = gdf.dropna(subset=["lat", "lng"]).copy()
+    if valid.empty:
+        return gdf.iloc[0:0].copy()
 
-    while (count < min_apartments or len(points) <= min_addresses) and iterations < max_iterations:
-        iterations += 1
-        curr_point = points[len(points) - 1]
+    # Group by rounded coordinates (~0.1m precision) - proxy for "building/entrance",
+    # since individual apartment units within a building share the same geocoded point.
+    valid["_loc_key"] = valid["lat"].round(6).astype(str) + "," + valid["lng"].round(6).astype(str)
+    locations = valid.drop_duplicates(subset=["_loc_key"])[["_loc_key", "lat", "lng"]].reset_index(drop=True)
 
-        if len(search_gdf) == 0:
+    # Vectorized haversine distance (meters) from the search point to every building.
+    earth_radius_m = 6_371_000.0
+    lat1, lng1 = np.radians(lat), np.radians(lng)
+    lat2, lng2 = np.radians(locations["lat"].to_numpy()), np.radians(locations["lng"].to_numpy())
+    dlat, dlng = lat2 - lat1, lng2 - lng1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlng / 2) ** 2
+    locations["distance_m"] = 2 * earth_radius_m * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
+    locations = locations.sort_values("distance_m", kind="stable").reset_index(drop=True)
+
+    distances = locations["distance_m"].to_numpy()
+    n = min(len(distances), max_addresses)
+
+    cutoff = min(min_addresses, n)
+    for i in range(min_addresses, n):
+        gap = distances[i] - distances[i - 1]
+        running_avg_gap = distances[i - 1] / max(i, 1)
+        if gap > max(min_gap_m, gap_factor * running_avg_gap):
             break
+        cutoff = i + 1
 
-        neighborhood = search_gdf.sindex.nearest(Point(curr_point[1], curr_point[0]))
-        indices = [int(i) for i in neighborhood[1]] if hasattr(neighborhood, "__len__") else [int(neighborhood)]
+    keep_order = list(locations["_loc_key"].iloc[:cutoff])
+    selected_keys = set(keep_order)
+    result = valid[valid["_loc_key"].isin(selected_keys)].drop(columns="_loc_key")
 
-        for i in indices:
-            count += 1
-            row = search_gdf.iloc[i]
-            lati, longi = float(row["lat"]), float(row["lng"])
-            if (longi, lati) not in points_set:
-                points.append((longi, lati))
-                points_set.add((longi, lati))
-            collected_idx.append(row.name)
-
-        visited_lnglat = {",".join(map(str, tup)) for tup in points_set}
-        search_gdf = search_gdf[~search_gdf["lnglat"].isin(visited_lnglat)]
-
-    result = gdf.loc[gdf.index.isin(collected_idx)].copy()
+    if len(result) > max_apartments:
+        # Keep apartments from the closest buildings first if the cap is hit.
+        rank = {k: i for i, k in enumerate(keep_order)}
+        result = (
+            valid[valid["_loc_key"].isin(selected_keys)]
+            .assign(_rank=lambda d: d["_loc_key"].map(rank))
+            .sort_values("_rank")
+            .head(max_apartments)
+            .drop(columns=["_loc_key", "_rank"])
+        )
 
     if len(result):
         min_p, max_p = result["adjusted_sqm_price"].min(), result["adjusted_sqm_price"].max()
