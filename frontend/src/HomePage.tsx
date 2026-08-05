@@ -4,6 +4,7 @@ import { GeoJsonLayer } from "@deck.gl/layers";
 import MapView from "./MapView";
 import { fetchApartments, fetchMeta, fetchParishStats, fetchPostalStats, type Meta } from "./api";
 import { colorForValue, gradientCss, PALETTE_NAMES, type PaletteName } from "./palettes";
+import type { Theme } from "./useTheme";
 
 type Scale = "apartments" | "postal" | "parish";
 type Attribute = "adjusted_sqm_price" | "square_meters_price";
@@ -18,7 +19,7 @@ function scaleValues<T extends Record<string, any>>(features: T[], key: string):
   return (v: number) => (v - min) / span;
 }
 
-export default function HomePage() {
+export default function HomePage({ theme }: { theme: Theme }) {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [yearRange, setYearRange] = useState<[number, number]>([2020, 2024]);
   const [attribute, setAttribute] = useState<Attribute>("adjusted_sqm_price");
@@ -185,7 +186,7 @@ export default function HomePage() {
 
       <div style={{ flex: 1, display: "flex" }}>
         <div style={{ flex: 1 }}>
-          <MapView layers={layers} initialViewState={COPENHAGEN_VIEW} getTooltip={tooltip} />
+          <MapView layers={layers} initialViewState={COPENHAGEN_VIEW} getTooltip={tooltip} theme={theme} />
         </div>
         <div className="colorbar">
           <div className="colorbar-gradient" style={{ background: gradientCss(palette) }} />

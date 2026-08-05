@@ -3,6 +3,7 @@ import { ColumnLayer, ScatterplotLayer } from "@deck.gl/layers";
 import MapView from "./MapView";
 import { searchAddress, type SearchResult } from "./api";
 import { colorForValue, type PaletteName } from "./palettes";
+import type { Theme } from "./useTheme";
 
 interface SaleRow {
   address: string;
@@ -113,9 +114,9 @@ function PriceHistogram({ prices }: { prices: number[] }) {
         const y = padding.top + (innerH - barH);
         return (
           <g key={i}>
-            <rect x={x} y={y} width={Math.max(barW, 1)} height={barH} fill="#4fa8ff" opacity={0.85} />
+            <rect x={x} y={y} width={Math.max(barW, 1)} height={barH} fill="var(--accent)" opacity={0.85} />
             {count > 0 && (
-              <text x={x + barW / 2} y={y - 3} fontSize={9} textAnchor="middle" fill="#ccc">
+              <text x={x + barW / 2} y={y - 3} fontSize={9} textAnchor="middle" fill="var(--text-muted)">
                 {count}
               </text>
             )}
@@ -127,12 +128,12 @@ function PriceHistogram({ prices }: { prices: number[] }) {
         y1={padding.top + innerH}
         x2={width - padding.right}
         y2={padding.top + innerH}
-        stroke="#555"
+        stroke="var(--border)"
       />
-      <text x={padding.left} y={height - 6} fontSize={10} fill="#aaa">
+      <text x={padding.left} y={height - 6} fontSize={10} fill="var(--text-muted)">
         {fmt(min)}
       </text>
-      <text x={width - padding.right} y={height - 6} fontSize={10} fill="#aaa" textAnchor="end">
+      <text x={width - padding.right} y={height - 6} fontSize={10} fill="var(--text-muted)" textAnchor="end">
         {fmt(max)}
       </text>
     </svg>
@@ -141,7 +142,7 @@ function PriceHistogram({ prices }: { prices: number[] }) {
 
 const DEFAULT_PALETTE: PaletteName = "Viridis";
 
-export default function SearchPage() {
+export default function SearchPage({ theme }: { theme: Theme }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -253,6 +254,7 @@ export default function SearchPage() {
             layers={layers}
             initialViewState={viewState}
             getTooltip={tooltip}
+            theme={theme}
           />
         </div>
 

@@ -1,5 +1,37 @@
 :root {
+  color-scheme: light;
+
+  --bg: #f5f6f8;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #6a6a6a;
+  --border: #d8dade;
+  --accent: #2a6cf0;
+  --accent-text: #ffffff;
+  --link: #1c5fd6;
+  --error-bg: #ffe1e1;
+  --error-text: #a11616;
+  --result-bg: #e3edfb;
+  --row-highlight: #fff4cc;
+}
+
+[data-theme="dark"] {
   color-scheme: dark;
+
+  --bg: #111111;
+  --bg-elevated: #1f1f1f;
+  --bg-input: #1c1c1c;
+  --text: #eeeeee;
+  --text-muted: #999999;
+  --border: #333333;
+  --accent: #2a6cf0;
+  --accent-text: #ffffff;
+  --link: #4fa8ff;
+  --error-bg: #5a1a1a;
+  --error-text: #ffb4b4;
+  --result-bg: #1a2a3a;
+  --row-highlight: #2a2410;
 }
 
 * {
@@ -12,9 +44,10 @@ html, body, #root {
 }
 
 body {
-  background: #111;
-  color: #eee;
+  background: var(--bg);
+  color: var(--text);
   font-family: "Helvetica Neue", Arial, sans-serif;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .app-root {
@@ -28,7 +61,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
 }
 
 .app-header h1 {
@@ -38,8 +71,8 @@ body {
 
 .app-header nav button {
   background: none;
-  border: 1px solid #444;
-  color: #eee;
+  border: 1px solid var(--border);
+  color: var(--text);
   padding: 0.4rem 1rem;
   margin-left: 0.5rem;
   border-radius: 4px;
@@ -47,8 +80,15 @@ body {
 }
 
 .app-header nav button.active {
-  background: #2a6cf0;
-  border-color: #2a6cf0;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.app-header nav button.theme-toggle {
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .app-main {
@@ -62,7 +102,7 @@ body {
   gap: 1.25rem;
   align-items: center;
   padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
 }
 
 .controls label {
@@ -75,18 +115,18 @@ body {
 .controls select,
 .controls input[type="text"],
 .controls input:not([type="range"]) {
-  background: #1c1c1c;
-  color: #eee;
-  border: 1px solid #444;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.35rem 0.5rem;
 }
 
 .controls button {
   align-self: flex-end;
-  background: #2a6cf0;
+  background: var(--accent);
   border: none;
-  color: white;
+  color: var(--accent-text);
   padding: 0.5rem 1.25rem;
   border-radius: 4px;
   cursor: pointer;
@@ -121,13 +161,13 @@ body {
 }
 
 .error-banner {
-  background: #5a1a1a;
-  color: #ffb4b4;
+  background: var(--error-bg);
+  color: var(--error-text);
   padding: 0.5rem 1.5rem;
 }
 
 .result-banner {
-  background: #1a2a3a;
+  background: var(--result-bg);
   padding: 0.5rem 1.5rem;
 }
 
@@ -141,14 +181,14 @@ body {
 .stats-grid > div {
   display: flex;
   flex-direction: column;
-  background: #1f1f1f;
+  background: var(--bg-elevated);
   border-radius: 6px;
   padding: 0.4rem 0.6rem;
 }
 
 .stat-label {
   font-size: 0.7rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .stat-value {
@@ -166,15 +206,15 @@ body {
 .sales-table td {
   text-align: left;
   padding: 0.3rem 0.5rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .sales-table th {
   position: sticky;
   top: 0;
-  background: #161616;
-  color: #aaa;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -187,7 +227,7 @@ body {
   background: none;
   border: none;
   padding: 0;
-  color: #4fa8ff;
+  color: var(--link);
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -198,9 +238,9 @@ body {
 
 .address-link:hover,
 .address-link:focus-visible {
-  text-decoration-color: #4fa8ff;
+  text-decoration-color: var(--link);
 }
 
 .sales-row-highlighted {
-  background: #2a2410;
+  background: var(--row-highlight);
 }

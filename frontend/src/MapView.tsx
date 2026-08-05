@@ -4,32 +4,37 @@ import type { Map as MLMap } from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer } from "@deck.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { Theme } from "./useTheme";
 
-const BASEMAP_STYLE: any = {
-  version: 8,
-  sources: {
-    carto: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+function basemapStyle(theme: Theme): any {
+  const variant = theme === "dark" ? "dark_all" : "light_all";
+  return {
+    version: 8,
+    sources: {
+      carto: {
+        type: "raster",
+        tiles: [
+          `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
+          `https://b.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
+          `https://c.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
+          `https://d.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
+        ],
+        tileSize: 256,
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+      },
     },
-  },
-  layers: [{ id: "carto-raster", type: "raster", source: "carto" }],
-};
+    layers: [{ id: "carto-raster", type: "raster", source: "carto" }],
+  };
+}
 
 interface MapViewProps {
   layers: Layer[];
   initialViewState: { longitude: number; latitude: number; zoom: number; pitch?: number; bearing?: number };
   getTooltip?: (info: any) => string | null;
+  theme?: Theme;
 }
 
-export default function MapView({ layers, initialViewState, getTooltip }: MapViewProps) {
+export default function MapView({ layers, initialViewState, getTooltip, theme = "light" }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -40,7 +45,7 @@ export default function MapView({ layers, initialViewState, getTooltip }: MapVie
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: BASEMAP_STYLE,
+      style: basemapStyle(theme),
       center: [initialViewState.longitude, initialViewState.latitude],
       zoom: initialViewState.zoom,
       pitch: initialViewState.pitch ?? 0,
@@ -65,6 +70,10 @@ export default function MapView({ layers, initialViewState, getTooltip }: MapVie
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    mapRef.current?.setStyle(basemapStyle(theme));
+  }, [theme]);
 
   useEffect(() => {
     overlayRef.current?.setProps({ layers });
