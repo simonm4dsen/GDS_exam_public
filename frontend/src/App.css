@@ -182,3 +182,25 @@ body {
 .sales-table th:last-child {
   white-space: normal;
 }
+
+.address-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #4fa8ff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.address-link:hover,
+.address-link:focus-visible {
+  text-decoration-color: #4fa8ff;
+}
+
+.sales-row-highlighted {
+  background: #2a2410;
+}

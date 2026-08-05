@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ColumnLayer } from "@deck.gl/layers";
+import { ColumnLayer, ScatterplotLayer } from "@deck.gl/layers";
 import MapView from "./MapView";
 import { searchAddress, type SearchResult } from "./api";
 import { colorForValue, type PaletteName } from "./palettes";
@@ -10,6 +10,10 @@ interface SaleRow {
   adjustedSqmPrice: number;
   squareMeters: number | null;
   salePrice: number | null;
+  addressUrl: string | null;
+  source: string | null;
+  lng: number;
+  lat: number;
 }
 
 interface SaleStats {
@@ -29,12 +33,18 @@ function computeStats(result: SearchResult): SaleStats | null {
       const p = f.properties as any;
       const price = p.adjusted_sqm_price;
       if (typeof price !== "number" || Number.isNaN(price)) return null;
+      const [lng, lat] = (f.geometry as any)?.coordinates ?? [null, null];
+      if (typeof lng !== "number" || typeof lat !== "number") return null;
       return {
         address: (p.tooltip_address ?? p.address ?? "").toString(),
         year: Number(p.year),
         adjustedSqmPrice: price,
         squareMeters: typeof p.square_meters === "number" ? p.square_meters : null,
         salePrice: typeof p.latest_sale_price === "number" ? p.latest_sale_price : null,
+        addressUrl: typeof p.address_url === "string" ? p.address_url : null,
+        source: typeof p.source === "string" ? p.source : null,
+        lng,
+        lat,
       };
     })
     .filter((r): r is SaleRow => r !== null)
@@ -62,6 +72,14 @@ function computeStats(result: SearchResult): SaleStats | null {
 
 function fmt(n: number, digits = 0) {
   return n.toLocaleString("da-DK", { maximumFractionDigits: digits });
+}
+
+function boligsidenUrl(addressUrl: string | null, source: string | null): string | null {
+  // Only new (boligsiden-sourced) rows have a real per-address slug; legacy rows'
+  // address_url is a stale postal-area slug from the old scraper and doesn't
+  // resolve to the actual sale's address page.
+  if (source !== "boligsiden" || !addressUrl) return null;
+  return `https://www.boligsiden.dk/adresse/${addressUrl}`;
 }
 
 function PriceHistogram({ prices }: { prices: number[] }) {
@@ -128,11 +146,13 @@ export default function SearchPage() {
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<{ lng: number; lat: number } | null>(null);
 
   async function handleSearch() {
     if (!text.trim()) return;
     setLoading(true);
     setError(null);
+    setHighlight(null);
     try {
       const r = await searchAddress(text);
       setResult(r);
@@ -152,7 +172,7 @@ export default function SearchPage() {
     const max = Math.max(...values);
     const span = max - min || 1;
 
-    return [
+    const layerList: any[] = [
       new ColumnLayer({
         id: "search-results",
         data: result.apartments.features,
@@ -166,9 +186,38 @@ export default function SearchPage() {
           colorForValue(((f.properties.adjusted_sqm_price ?? min) - min) / span, DEFAULT_PALETTE),
       }),
     ];
-  }, [result]);
+
+    if (highlight) {
+      layerList.push(
+        new ScatterplotLayer({
+          id: "search-highlight",
+          data: [highlight],
+          getPosition: (d: any) => [d.lng, d.lat],
+          radiusUnits: "meters",
+          getRadius: 14,
+          stroked: true,
+          filled: true,
+          getFillColor: [255, 210, 0, 130],
+          getLineColor: [255, 255, 255, 230],
+          lineWidthMinPixels: 3,
+        })
+      );
+    }
+
+    return layerList;
+  }, [result, highlight]);
 
   const stats = useMemo(() => (result ? computeStats(result) : null), [result]);
+
+  const viewState = useMemo(
+    () => ({
+      longitude: highlight?.lng ?? result?.lng ?? 12.56,
+      latitude: highlight?.lat ?? result?.lat ?? 55.67,
+      zoom: highlight ? 17 : result ? 15 : 10,
+      pitch: 45,
+    }),
+    [highlight, result]
+  );
 
   const tooltip = (info: any) => {
     const p = info.object?.properties;
@@ -202,12 +251,7 @@ export default function SearchPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <MapView
             layers={layers}
-            initialViewState={{
-              longitude: result?.lng ?? 12.56,
-              latitude: result?.lat ?? 55.67,
-              zoom: result ? 15 : 10,
-              pitch: 45,
-            }}
+            initialViewState={viewState}
             getTooltip={tooltip}
           />
         </div>
@@ -261,21 +305,43 @@ export default function SearchPage() {
               <table className="sales-table">
                 <thead>
                   <tr>
+                    <th>Address</th>
                     <th>Year</th>
                     <th>Kr/m²</th>
                     <th>m²</th>
-                    <th>Address</th>
+                    <th>Link</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.rows.map((r, i) => (
-                    <tr key={i}>
-                      <td>{r.year}</td>
-                      <td>{fmt(r.adjustedSqmPrice)}</td>
-                      <td>{r.squareMeters != null ? fmt(r.squareMeters, 1) : "—"}</td>
-                      <td>{r.address}</td>
-                    </tr>
-                  ))}
+                  {stats.rows.map((r, i) => {
+                    const url = boligsidenUrl(r.addressUrl, r.source);
+                    const isHighlighted = highlight && highlight.lng === r.lng && highlight.lat === r.lat;
+                    return (
+                      <tr key={i} className={isHighlighted ? "sales-row-highlighted" : undefined}>
+                        <td>
+                          <button
+                            className="address-link"
+                            onClick={() => setHighlight({ lng: r.lng, lat: r.lat })}
+                            title="Highlight this sale on the map"
+                          >
+                            {r.address}
+                          </button>
+                        </td>
+                        <td>{r.year}</td>
+                        <td>{fmt(r.adjustedSqmPrice)}</td>
+                        <td>{r.squareMeters != null ? fmt(r.squareMeters, 1) : "—"}</td>
+                        <td>
+                          {url ? (
+                            <a href={url} target="_blank" rel="noreferrer">
+                              Boligsiden
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

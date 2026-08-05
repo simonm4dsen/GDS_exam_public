@@ -227,7 +227,7 @@ def normalize_case(case: dict, min_registration_date: date | None) -> list[dict]
         rows.append(
             {
                 "address": full_address,
-                "address_url": case.get("slugAddress") or case.get("slug"),
+                "address_url": address.get("slugAddress") or address.get("slug"),
                 "city": zip_name,
                 "kommune": municipality.get("name"),
                 "postal": zip_code,
