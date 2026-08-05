@@ -83,46 +83,112 @@ function boligsidenUrl(addressUrl: string | null, source: string | null): string
   return `https://www.boligsiden.dk/adresse/${addressUrl}`;
 }
 
-function PriceHistogram({ prices }: { prices: number[] }) {
-  const width = 480;
-  const height = 160;
-  const padding = { top: 10, right: 10, bottom: 24, left: 36 };
-  const bucketCount = 16;
+function quantile(sortedValues: number[], q: number): number {
+  const n = sortedValues.length;
+  if (n === 0) return NaN;
+  if (n === 1) return sortedValues[0];
+  const pos = (n - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return sortedValues[lo];
+  return sortedValues[lo] + (sortedValues[hi] - sortedValues[lo]) * (pos - lo);
+}
 
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const span = max - min || 1;
-  const bucketSize = span / bucketCount;
+/**
+ * Gaussian kernel density estimate, sampled on an evenly spaced grid across
+ * (a slightly padded) price domain. Bandwidth via Silverman's rule of thumb.
+ */
+function kernelDensity(sortedPrices: number[], gridN = 200) {
+  const n = sortedPrices.length;
+  const dataMin = sortedPrices[0];
+  const dataMax = sortedPrices[n - 1];
+  const span = dataMax - dataMin || 1;
+  const domainPad = span * 0.08;
+  const domainMin = dataMin - domainPad;
+  const domainMax = dataMax + domainPad;
 
-  const buckets = new Array(bucketCount).fill(0);
-  for (const p of prices) {
-    const idx = Math.min(bucketCount - 1, Math.floor((p - min) / bucketSize));
-    buckets[idx] += 1;
+  const mean = sortedPrices.reduce((a, b) => a + b, 0) / n;
+  const variance = n > 1 ? sortedPrices.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0;
+  const std = Math.sqrt(variance);
+  const iqr = quantile(sortedPrices, 0.75) - quantile(sortedPrices, 0.25);
+  const sigmaEst = iqr > 0 ? Math.min(std, iqr / 1.34) : std;
+  const bandwidth = Math.max(0.9 * (sigmaEst || span) * Math.pow(n, -0.2), span / gridN);
+
+  const gridStep = (domainMax - domainMin) / gridN;
+  const grid: number[] = [];
+  const density: number[] = [];
+  const norm = 1 / (n * bandwidth * Math.sqrt(2 * Math.PI));
+  for (let j = 0; j <= gridN; j++) {
+    const x = domainMin + j * gridStep;
+    let sum = 0;
+    for (const xi of sortedPrices) {
+      const u = (x - xi) / bandwidth;
+      sum += Math.exp(-0.5 * u * u);
+    }
+    grid.push(x);
+    density.push(sum * norm);
   }
-  const maxCount = Math.max(...buckets, 1);
+  return { domainMin, domainMax, gridStep, grid, density, maxDensity: Math.max(...density, 1e-9) };
+}
+
+function PriceDistribution({ prices }: { prices: number[] }) {
+  const width = 480;
+  const densityHeight = 150;
+  const gaugeHeight = 34;
+  const gaugeGap = 16;
+  const padding = { top: 10, right: 10, bottom: 24, left: 36 };
+  const [hoverX, setHoverX] = useState<number | null>(null);
+
+  const sorted = [...prices].sort((a, b) => a - b);
+  const { domainMin, domainMax, gridStep, grid, density, maxDensity } = kernelDensity(sorted);
+  const p33 = quantile(sorted, 1 / 3);
+  const p67 = quantile(sorted, 2 / 3);
 
   const innerW = width - padding.left - padding.right;
-  const innerH = height - padding.top - padding.bottom;
-  const barGap = 2;
-  const barW = innerW / bucketCount - barGap;
+  const innerH = densityHeight - padding.top - padding.bottom;
+
+  const xScale = (price: number) => padding.left + ((price - domainMin) / (domainMax - domainMin)) * innerW;
+  const yScale = (d: number) => padding.top + innerH - (d / maxDensity) * innerH;
+
+  const linePath = grid.map((x, j) => `${j === 0 ? "M" : "L"}${xScale(x)},${yScale(density[j])}`).join(" ");
+  const areaPath = `${linePath} L${xScale(domainMax)},${padding.top + innerH} L${xScale(domainMin)},${
+    padding.top + innerH
+  } Z`;
+
+  const gaugeY = densityHeight + gaugeGap;
+  const gaugeInnerH = gaugeHeight - 16;
+
+  function priceAtClientX(clientX: number, svgEl: SVGSVGElement): number {
+    const rect = svgEl.getBoundingClientRect();
+    const scaleX = width / rect.width; // account for CSS scaling of the SVG
+    const px = (clientX - rect.left) * scaleX;
+    const clamped = Math.min(Math.max(px, padding.left), width - padding.right);
+    return domainMin + ((clamped - padding.left) / innerW) * (domainMax - domainMin);
+  }
+
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    const price = priceAtClientX(e.clientX, e.currentTarget);
+    setHoverX(xScale(price));
+  }
+
+  const hoverPrice = hoverX != null ? domainMin + ((hoverX - padding.left) / innerW) * (domainMax - domainMin) : null;
+  const hoverDensity =
+    hoverPrice != null ? density[Math.min(grid.length - 1, Math.max(0, Math.round((hoverPrice - domainMin) / gridStep)))] : null;
+  const labelX = hoverX != null ? Math.min(Math.max(hoverX, padding.left + 40), width - padding.right - 40) : 0;
 
   return (
-    <svg width={width} height={height} role="img" aria-label="Price distribution histogram">
-      {buckets.map((count, i) => {
-        const barH = (count / maxCount) * innerH;
-        const x = padding.left + i * (innerW / bucketCount) + barGap / 2;
-        const y = padding.top + (innerH - barH);
-        return (
-          <g key={i}>
-            <rect x={x} y={y} width={Math.max(barW, 1)} height={barH} fill="var(--accent)" opacity={0.85} />
-            {count > 0 && (
-              <text x={x + barW / 2} y={y - 3} fontSize={9} textAnchor="middle" fill="var(--text-muted)">
-                {count}
-              </text>
-            )}
-          </g>
-        );
-      })}
+    <svg
+      width={width}
+      height={gaugeY + gaugeHeight + 12}
+      role="img"
+      aria-label="Price density distribution and cheap/expected/high price gauge"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHoverX(null)}
+      style={{ cursor: "crosshair" }}
+    >
+      {/* density curve */}
+      <path d={areaPath} fill="var(--accent)" opacity={0.25} />
+      <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth={2} />
       <line
         x1={padding.left}
         y1={padding.top + innerH}
@@ -130,12 +196,73 @@ function PriceHistogram({ prices }: { prices: number[] }) {
         y2={padding.top + innerH}
         stroke="var(--border)"
       />
-      <text x={padding.left} y={height - 6} fontSize={10} fill="var(--text-muted)">
-        {fmt(min)}
+      <text x={padding.left} y={densityHeight - 6} fontSize={10} fill="var(--text-muted)">
+        {fmt(domainMin)}
       </text>
-      <text x={width - padding.right} y={height - 6} fontSize={10} fill="var(--text-muted)" textAnchor="end">
-        {fmt(max)}
+      <text x={width - padding.right} y={densityHeight - 6} fontSize={10} fill="var(--text-muted)" textAnchor="end">
+        {fmt(domainMax)}
       </text>
+
+      {/* price gauge: cheap / expected / high segments, sharing the x axis above */}
+      <rect
+        x={xScale(domainMin)}
+        y={gaugeY}
+        width={Math.max(xScale(p33) - xScale(domainMin), 0)}
+        height={gaugeInnerH}
+        fill="#2ecc71"
+      />
+      <rect
+        x={xScale(p33)}
+        y={gaugeY}
+        width={Math.max(xScale(p67) - xScale(p33), 0)}
+        height={gaugeInnerH}
+        fill="#f1c40f"
+      />
+      <rect
+        x={xScale(p67)}
+        y={gaugeY}
+        width={Math.max(xScale(domainMax) - xScale(p67), 0)}
+        height={gaugeInnerH}
+        fill="#e74c3c"
+      />
+      <text x={xScale(domainMin)} y={gaugeY + gaugeInnerH + 12} fontSize={9} fill="var(--text-muted)">
+        Cheap
+      </text>
+      <text
+        x={(xScale(p33) + xScale(p67)) / 2}
+        y={gaugeY + gaugeInnerH + 12}
+        fontSize={9}
+        fill="var(--text-muted)"
+        textAnchor="middle"
+      >
+        Expected
+      </text>
+      <text x={xScale(domainMax)} y={gaugeY + gaugeInnerH + 12} fontSize={9} fill="var(--text-muted)" textAnchor="end">
+        High
+      </text>
+
+      {/* hover crosshair + tooltip, spanning both charts */}
+      {hoverX != null && hoverPrice != null && (
+        <>
+          <line
+            x1={hoverX}
+            y1={padding.top}
+            x2={hoverX}
+            y2={padding.top + innerH}
+            stroke="var(--text)"
+            strokeDasharray="3,3"
+            opacity={0.6}
+          />
+          <circle cx={hoverX} cy={yScale(hoverDensity ?? 0)} r={3} fill="var(--accent)" />
+          <line x1={hoverX} y1={gaugeY} x2={hoverX} y2={gaugeY + gaugeInnerH} stroke="var(--text)" strokeWidth={1.5} />
+          <g transform={`translate(${labelX}, ${padding.top + 4})`}>
+            <rect x={-40} y={-2} width={80} height={16} rx={3} fill="var(--bg-elevated)" stroke="var(--border)" />
+            <text x={0} y={10} fontSize={10} fill="var(--text)" textAnchor="middle">
+              {fmt(hoverPrice)} kr/m²
+            </text>
+          </g>
+        </>
+      )}
     </svg>
   );
 }
@@ -300,7 +427,7 @@ export default function SearchPage({ theme }: { theme: Theme }) {
             </div>
 
             <h4>Price distribution</h4>
-            <PriceHistogram prices={stats.rows.map((r) => r.adjustedSqmPrice)} />
+            <PriceDistribution prices={stats.rows.map((r) => r.adjustedSqmPrice)} />
 
             <h4>Sales by year</h4>
             <div style={{ overflowX: "auto" }}>
