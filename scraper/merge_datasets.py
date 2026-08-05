@@ -39,9 +39,12 @@ def merge(legacy_path: Path, new_path: Path, out_path: Path) -> None:
     new_features = load_features(new_path)
 
     # Tag provenance so the frontend can distinguish enriched legacy rows from
-    # core-only new rows.
+    # core-only new rows. Legacy rows predate Boligsiden's sale-type
+    # classification; treat them as ordinary market sales ("normal") since the
+    # original dataset was already curated for market-price analysis.
     for feat in legacy_features:
         feat["properties"].setdefault("source", "legacy")
+        feat["properties"].setdefault("sale_type", "normal")
 
     combined_features = []
     for i, feat in enumerate(legacy_features + new_features):

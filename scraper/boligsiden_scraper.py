@@ -43,7 +43,13 @@ dropped. Only core fields are written for scraped rows:
 
     address, address_url, city, kommune, postal, lat, lng,
     square_meters, square_meters_price, latest_sale_price, latest_sale_date, year,
-    energy, case_id, address_id, registration_id, source
+    energy, case_id, address_id, registration_id, source, sale_type
+
+``sale_type`` is Boligsiden's own classification of each registration
+(``normal`` / ``auction`` / ``family`` / ``other``). Only ``normal`` ("alm. frit
+salg") and ``auction`` sales reflect arm's-length market prices; ``family``
+trades (familiehandel, i.e. transfers between relatives, often below market
+value) are excluded downstream when computing market statistics.
 
 Usage
 -----
@@ -243,6 +249,7 @@ def normalize_case(case: dict, min_registration_date: date | None) -> list[dict]
                 "address_id": address.get("addressID"),
                 "registration_id": reg.get("registrationID"),
                 "source": "boligsiden",
+                "sale_type": reg.get("type"),
             }
         )
     return rows

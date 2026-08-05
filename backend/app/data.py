@@ -32,6 +32,16 @@ def get_apartments() -> gpd.GeoDataFrame:
     gdf["adjusted_sqm_price"] = gdf["adjusted_sqm_price"].fillna(gdf.get("square_meters_price"))
     gdf = gdf.dropna(subset=["adjusted_sqm_price", "lat", "lng"])
 
+    # Only "normal" (alm. frit salg) and "auction" registrations reflect
+    # arm's-length market prices. "family" trades (familiehandel, i.e.
+    # transfers between relatives, often below market value) and unclassified
+    # "other" registrations are excluded so they don't skew price statistics.
+    # Rows without a sale_type (legacy data predating this classification)
+    # are kept, since the legacy dataset was already curated for market sales.
+    MARKET_SALE_TYPES = {"normal", "auction"}
+    if "sale_type" in gdf.columns:
+        gdf = gdf[gdf["sale_type"].isna() | gdf["sale_type"].isin(MARKET_SALE_TYPES)]
+
     gdf["year"] = gdf["year"].astype(int)
 
     gdf["tooltip_price"] = gdf["adjusted_sqm_price"].astype(int).map("{:,.0f}".format)
