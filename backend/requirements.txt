@@ -1,0 +1,7 @@
+# FastAPI backend
+fastapi
+uvicorn[standard]
+geopandas
+shapely
+pandas
+requests

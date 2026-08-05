@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Scraper state (machine-local incremental watermark)
+scraper/scrape_state.json
+
+# Editors / OS
+.DS_Store

@@ -1,14 +1,10 @@
---find-links=https://girder.github.io/large_image_wheels GDAL
+# Root requirements: kept for the legacy analysis.ipynb / dawa_scrape_prod.py notebook workflow.
+# The webapp itself is now split into:
+#   - backend/requirements.txt  (FastAPI + geopandas backend)
+#   - frontend/package.json     (React/Vite + MapLibre/deck.gl frontend)
+# The Boligsiden scraper (scraper/) only needs `requests` from the stdlib-adjacent deps below.
+
+requests
 geopandas
-keplergl
-palettable
-localtileserver
-rtree
-streamlit
-streamlit-folium
-streamlit-keplergl
-streamlit-bokeh-events
-# leafmap
-# geemap
-git+https://github.com/giswqs/leafmap
-git+https://github.com/giswqs/geemap
+shapely
+pandas
