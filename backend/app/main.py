@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from . import data, search
 
@@ -22,6 +23,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def _geojson_response(gdf) -> dict:
@@ -39,6 +41,11 @@ def meta() -> dict:
     years = sorted(int(y) for y in gdf["year"].unique())
     postals = sorted(int(p) for p in gdf["postal"].dropna().unique())
     return {"min_year": years[0], "max_year": years[-1], "years": years, "postals": postals}
+
+
+@app.get("/api/map-points")
+def map_points() -> dict:
+    return data.get_map_points()
 
 
 @app.get("/api/apartments")
@@ -114,11 +121,14 @@ def parish_stats(
 
 @app.get("/api/search")
 def search_address(address: str = Query(..., min_length=3)) -> dict:
-    geocoded = search.geocode(address)
+    gdf = data.get_apartments()
+    try:
+        geocoded = search.geocode(address, gdf)
+    except search.GeocodingError as exc:
+        raise HTTPException(502, str(exc)) from exc
     if geocoded["lat"] is None or geocoded["lng"] is None:
         raise HTTPException(404, f"Could not geocode address: {address}")
 
-    gdf = data.get_apartments()
     nearby = search.nearest_apartments(gdf, geocoded["lat"], geocoded["lng"])
 
     return {

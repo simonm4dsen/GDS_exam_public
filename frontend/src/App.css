@@ -14,6 +14,9 @@
   --error-text: #a11616;
   --result-bg: #e3edfb;
   --row-highlight: #fff4cc;
+  --chart-guide: #8197ad;
+  --chart-guide-text: #657d95;
+  --chart-card-bg: #fbfcfe;
 }
 
 [data-theme="dark"] {
@@ -32,6 +35,9 @@
   --error-text: #ffb4b4;
   --result-bg: #1a2a3a;
   --row-highlight: #2a2410;
+  --chart-guide: #9aafc3;
+  --chart-guide-text: #a8bbce;
+  --chart-card-bg: #22272d;
 }
 
 * {
@@ -137,6 +143,39 @@ body {
   cursor: default;
 }
 
+.controls button.all-mode-button {
+  min-width: 64px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.controls button.all-mode-button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.map-view-container {
+  position: relative;
+}
+
+.map-loading {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  box-shadow: 0 2px 12px #0002;
+  color: var(--text);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
 .colorbar {
   width: 60px;
   display: flex;
@@ -169,21 +208,26 @@ body {
 .result-banner {
   background: var(--result-bg);
   padding: 0.5rem 1.5rem;
+  overflow-wrap: anywhere;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem 1rem;
-  margin-bottom: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0 0 1rem;
 }
 
 .stats-grid > div {
   display: flex;
   flex-direction: column;
-  background: var(--bg-elevated);
-  border-radius: 6px;
-  padding: 0.4rem 0.6rem;
+  justify-content: center;
+  min-width: 0;
+  min-height: 54px;
+  background: var(--chart-card-bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.5rem 0.65rem;
 }
 
 .stat-label {
@@ -192,22 +236,59 @@ body {
 }
 
 .stat-value {
-  font-size: 1.05rem;
+  margin-top: 0.15rem;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}
+
+.summary-title {
+  margin: 0.2rem 0 0.75rem;
+  font-size: 1rem;
   font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.insight-card {
+  min-width: 0;
+  margin: 0 0 0.85rem;
+  overflow: hidden;
+  background: var(--chart-card-bg);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.insight-card-heading {
+  padding: 0.65rem 0.8rem 0;
+}
+
+.insight-card-heading h4 {
+  margin: 0;
+  font-size: 0.83rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.insight-card-heading .stat-label {
+  margin: 0.18rem 0 0;
+  font-size: 0.67rem;
 }
 
 .sales-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 .sales-table th,
 .sales-table td {
   text-align: left;
-  padding: 0.3rem 0.5rem;
+  padding: 0.3rem 0.25rem;
   border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .sales-table th {
@@ -218,9 +299,67 @@ body {
   font-weight: 500;
 }
 
-.sales-table td:last-child,
-.sales-table th:last-child {
-  white-space: normal;
+.sales-table th:nth-child(1) { width: 27%; }
+.sales-table th:nth-child(2) { width: 10%; }
+.sales-table th:nth-child(3),
+.sales-table th:nth-child(4) { width: 17%; }
+.sales-table th:nth-child(5) { width: 10%; }
+.sales-table th:nth-child(6) { width: 19%; }
+
+.chart-container {
+  width: 100%;
+  min-width: 0;
+  padding: 0.1rem 0.55rem 0.45rem;
+}
+
+.percentile-guide {
+  stroke: var(--chart-guide);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.82;
+}
+
+.percentile-value {
+  fill: var(--chart-guide-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.percentile-label {
+  fill: var(--chart-guide-text);
+  letter-spacing: 0.02em;
+}
+
+.distribution-hover-guide {
+  stroke: var(--chart-guide);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+}
+
+.sales-table-title {
+  margin: 0.7rem 0 0.35rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.sales-table-container {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  container-type: inline-size;
+}
+
+@container (max-width: 500px) {
+  .sales-table th:nth-child(6),
+  .sales-table td:nth-child(6) {
+    display: none;
+  }
+
+  .sales-table th:nth-child(1) { width: 32%; }
+  .sales-table th:nth-child(2) { width: 12%; }
+  .sales-table th:nth-child(3),
+  .sales-table th:nth-child(4) { width: 21%; }
+  .sales-table th:nth-child(5) { width: 14%; }
 }
 
 .address-link {

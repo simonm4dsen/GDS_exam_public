@@ -29,6 +29,39 @@ export async function fetchApartments(params: {
   return r.json();
 }
 
+export interface MapPointSale {
+  year: number;
+  normalizedSqmPrice: number;
+}
+
+export interface MapPoint {
+  lat: number;
+  lng: number;
+  address: string;
+  averageNormalizedPrice: number;
+  sales: MapPointSale[];
+}
+
+export interface AllMapData {
+  count: number;
+  sale_count: number;
+  price_scale: {
+    min: number;
+    max: number;
+    p33: number;
+    p67: number;
+    domain_min: number;
+    domain_max: number;
+  };
+  points: MapPoint[];
+}
+
+export async function fetchAllMapPoints(): Promise<AllMapData> {
+  const r = await fetch(`${API_BASE}/api/map-points`);
+  if (!r.ok) throw new Error(`map points failed: ${r.status}`);
+  return r.json();
+}
+
 export async function fetchPostalStats(params: {
   yearMin?: number;
   yearMax?: number;

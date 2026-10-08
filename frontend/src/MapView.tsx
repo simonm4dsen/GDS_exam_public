@@ -6,25 +6,8 @@ import type { Layer } from "@deck.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Theme } from "./useTheme";
 
-function basemapStyle(theme: Theme): any {
-  const variant = theme === "dark" ? "dark_all" : "light_all";
-  return {
-    version: 8,
-    sources: {
-      carto: {
-        type: "raster",
-        tiles: [
-          `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
-          `https://b.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
-          `https://c.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
-          `https://d.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}@2x.png`,
-        ],
-        tileSize: 256,
-        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-      },
-    },
-    layers: [{ id: "carto-raster", type: "raster", source: "carto" }],
-  };
+function basemapStyle(theme: Theme): string {
+  return `https://tiles.openfreemap.org/styles/${theme === "dark" ? "dark" : "positron"}`;
 }
 
 interface MapViewProps {
@@ -83,9 +66,17 @@ export default function MapView({ layers, initialViewState, getTooltip, theme = 
     mapRef.current?.flyTo({
       center: [initialViewState.longitude, initialViewState.latitude],
       zoom: initialViewState.zoom,
+      pitch: initialViewState.pitch ?? 0,
+      bearing: initialViewState.bearing ?? 0,
       essential: true,
     });
-  }, [initialViewState.longitude, initialViewState.latitude, initialViewState.zoom]);
+  }, [
+    initialViewState.longitude,
+    initialViewState.latitude,
+    initialViewState.zoom,
+    initialViewState.pitch,
+    initialViewState.bearing,
+  ]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
